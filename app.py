@@ -70,11 +70,12 @@ def get_song_link(music_url, max_attempts=3):
                                         "AppleWebKit/537.36 (KHTML, like Gecko) "
                                         "Chrome/91.0.4472.124 Safari/537.36")
             if DEPLOYMENT == 'heroku':
+                # NOTE: this is for chrome-for-testing buildpack!
                 # **Set the correct Chrome binary location**
-                chrome_options.binary_location = "/app/.heroku/chrome"
+                chrome_options.binary_location = "/app/.chrome-for-testing/chrome-linux64/chrome"
 
                 # **Set the correct Chromedriver location**
-                chrome_service = Service(executable_path="/app/.heroku/chromedriver")
+                chrome_service = Service(executable_path="/app/.chrome-for-testing/chromedriver-linux64/chromedriver")
 
                 driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
             else:
