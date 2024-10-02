@@ -1,4 +1,4 @@
-# songlink URL converter
+# songlink API _(scuffed)_
 <sub>by [zod](https://github.com/zudsniper)</sub>
 
 ## **`DISCLAIMER`**  
@@ -7,6 +7,7 @@ This project is **not** affiliated with [song.link](https://song.link)/[odesli.c
 
 ---
 
+[![wakatime](https://wakatime.com/badge/user/72fdcd5a-a9d0-4016-b00f-3f3d6fb2514a/project/d79687c4-7fae-4147-b68b-f5784afda25a.svg?style=plastic)](https://wakatime.com/badge/user/72fdcd5a-a9d0-4016-b00f-3f3d6fb2514a/project/d79687c4-7fae-4147-b68b-f5784afda25a)
 ### Why?
 **first**, [songwhip shut down](https://songwhip.com/faq/sunset), so I had to use [song.link](https://song.link) instead.  
 **additionally**, this allows for a mildly more convenient way to share music links across platforms programmatically.    
