@@ -1,7 +1,8 @@
 import os
 from urllib.parse import urlparse
 
-import dotenv
+from loguru import logger
+import dotenv as dotenv
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.common import TimeoutException, NoSuchElementException
@@ -17,7 +18,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium_stealth import stealth
 
 # populate the environment variables
-dotenv.config()
+dotenv.load_dotenv()
 
 # env vars
 HEADLESS = os.getenv('HEADLESS', 'True').lower() == 'true'
@@ -45,91 +46,83 @@ def convert_music_link():
         if song_link_url:
             return jsonify({"song_link": song_link_url})
         else:
-            return jsonify({"error": "Could not retrieve song.link URL"}), 500
+            return jsonify({"error": "Could not retrieve song.link URL after multiple attempts."}), 500
     except Exception as e:
+        logger.exception("An unexpected error occurred in /convert endpoint.")
         return jsonify({"error": str(e)}), 500
 
-def get_song_link(music_url):
-    # Set up Selenium options
-    # Set up Chrome options
-    chrome_options = Options()
-    if HEADLESS:
-        chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--auto-open-devtools-for-tabs")  # Opens DevTools automatically
-    chrome_options.add_argument(
-        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+def get_song_link(music_url, max_attempts=3):
+    attempt = 0
+    while attempt < max_attempts:
+        attempt += 1
+        logger.info(f"Attempt {attempt} of {max_attempts} to get song.link URL.")
+        driver = None  # Initialize driver within the loop
+        try:
+            # Set up Chrome options
+            chrome_options = Options()
+            if HEADLESS:
+                chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                        "Chrome/91.0.4472.124 Safari/537.36")
+            if not DEPLOYMENT == 'local':
+                chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+                chrome_service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
+                driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+            else:
+                driver = webdriver.Chrome(options=chrome_options)
 
-    if not DEPLOYMENT == 'local':
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
-        chrome_service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
-        driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-    else:
-        driver = webdriver.Chrome(options=chrome_options)
+            # Disable navigator.webdriver detection
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-    # disable navigator.webdriver detection
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            # Use stealth to avoid detection
+            stealth(driver,
+                    languages=["en-US", "en"],
+                    vendor="Google Inc.",
+                    platform="Win32",
+                    webgl_vendor="Intel Inc.",
+                    renderer="Intel Iris OpenGL Engine",
+                    fix_hairline=True)
 
-    # Use stealth to avoid detection
-    stealth(driver,
-            languages=["en-US", "en"],
-            vendor="Google Inc.",
-            platform="Win32",
-            webgl_vendor="Intel Inc.",
-            renderer="Intel Iris OpenGL Engine",
-            fix_hairline=True)
+            # Navigate to the song.link homepage
+            driver.get('https://odesli.co')
 
-    # Enable browser logging
-    chrome_options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+            # Find the input element by its ID and enter the music service URL
+            search_input = driver.find_element(By.ID, 'search-page-downshift-input')
+            search_input.send_keys(music_url)
+            search_input.send_keys(Keys.ENTER)
 
-    try:
-        # Navigate to the song.link homepage
-        driver.get('https://odesli.co') # this redirects to a different URL so the URL wait for the next bit should work
+            # Wait for the page to load
+            WebDriverWait(driver, 10).until(
+                ec.presence_of_element_located((By.CSS_SELECTOR, 'img[alt="Album artwork"]'))
+            )
 
-        # Find the input element by its ID and enter the music service URL
-        search_input = driver.find_element(By.ID, 'search-page-downshift-input')
-        search_input.send_keys(music_url)
-        search_input.send_keys(Keys.ENTER)
+            # Get the current URL after redirection (this will be the universal link)
+            song_link_url = driver.current_url
 
-        print_log(driver.get_log('browser'))
-
-        # Wait for the page to load
-        WebDriverWait(driver, 5).until(ec.presence_of_element_located((By.CSS_SELECTOR, 'img[alt="Album artwork"]')))
-
-        # Get the current URL after redirection (this will be the universal link)
-        song_link_url = driver.current_url
-        return song_link_url
-
-    except TimeoutException:
-
-        # Handle timeouts for missing elements or failed navigation
-
-        return {"error": "The request timed out or the page took too long to load."}
-
-    except NoSuchElementException:
-
-        # Handle cases where expected elements are missing (like after a 400 error)
-
-        if "400" in driver.page_source:
-
-            return {"error": "400 Bad Request: The URL provided is invalid or the request failed."}
-
-        else:
-
-            return {"error": "Element not found. The page may have failed to load correctly."}
-
-    except Exception as e:
-
-        # Catch any other exceptions and return a general error message
-
-        return {"error": f"An unexpected error occurred: {str(e)}"}
-
-    finally:
-        #input("Enter to close")
-        driver.quit()
+            # Validate the obtained URL
+            if validate_url(song_link_url):
+                logger.info(f"Successfully obtained song.link URL: {song_link_url}")
+                return song_link_url
+            else:
+                logger.warning("Invalid song_link_url obtained.")
+                time.sleep(1)  # Wait before retrying
+        except (TimeoutException, NoSuchElementException) as e:
+            logger.warning(f"Attempt {attempt} failed due to: {str(e)}")
+            time.sleep(1)  # Wait before retrying
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred on attempt {attempt}: {str(e)}")
+            time.sleep(1)  # Wait before retrying
+        finally:
+            if driver:
+                driver.quit()
+    # If all attempts failed
+    logger.error("All attempts to obtain song.link URL have failed.")
+    return None
 
 def print_log(logs):
     print("-"*60)
@@ -138,5 +131,4 @@ def print_log(logs):
 
 
 if __name__ == '__main__':
-    #print(get_song_link("https://open.spotify.com/track/4JKaEsSA22eNOozaLWy4v9?si=a7f10414ec49408c"))
     app.run(debug=True)
