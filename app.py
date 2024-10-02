@@ -69,9 +69,11 @@ def get_song_link(music_url, max_attempts=3):
             chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                         "AppleWebKit/537.36 (KHTML, like Gecko) "
                                         "Chrome/91.0.4472.124 Safari/537.36")
-            if not DEPLOYMENT == 'local':
-                chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
-                chrome_service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
+            if DEPLOYMENT == 'heroku':
+                # **Set the correct Chrome binary location**
+                chrome_options.binary_location = "/app/.heroku/chrome"
+                # **Set the correct Chromedriver location**
+                chrome_service = Service(executable_path="/app/.heroku/chromedriver")
                 driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
             else:
                 driver = webdriver.Chrome(options=chrome_options)
