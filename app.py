@@ -6,7 +6,6 @@ import dotenv as dotenv
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.common import TimeoutException, NoSuchElementException
-from selenium.webdriver import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -46,9 +45,9 @@ def convert_music_link():
         if song_link_url:
             return jsonify({"song_link": song_link_url})
         else:
-            return jsonify({"error": "Could not retrieve song.link URL after multiple attempts."}), 500
+            return jsonify({"error": "Could not retrieve song.link URL after multiple attempts."}), 504
     except Exception as e:
-        logger.exception("An unexpected error occurred in /convert endpoint.")
+        logger.exception("An unexpected error occurred")
         return jsonify({"error": str(e)}), 500
 
 def get_song_link(music_url, max_attempts=3):
