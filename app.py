@@ -72,8 +72,10 @@ def get_song_link(music_url, max_attempts=3):
             if DEPLOYMENT == 'heroku':
                 # **Set the correct Chrome binary location**
                 chrome_options.binary_location = "/app/.heroku/chrome"
+
                 # **Set the correct Chromedriver location**
                 chrome_service = Service(executable_path="/app/.heroku/chromedriver")
+
                 driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
             else:
                 driver = webdriver.Chrome(options=chrome_options)
